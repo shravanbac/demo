@@ -1,5 +1,6 @@
 const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 
+/** Toast notification */
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
@@ -20,18 +21,37 @@ function showToast(message, type = 'info') {
   setTimeout(() => toast.remove(), 4000);
 }
 
+/** Main handler */
 export default async function sendForReview() {
-  showToast('⚡ Button clicked!', 'info');
-
   try {
+    showToast('⚡ Button clicked, preparing request...', 'info');
+
+    // Derive page name from document.referrer
+    let pageName = 'index';
+    if (document.referrer) {
+      try {
+        const refUrl = new URL(document.referrer);
+        pageName = (refUrl.pathname.split('/').filter(Boolean).pop() || 'index')
+          .replace(/\.[^.]+$/, '') || 'index';
+      } catch {
+        pageName = 'index';
+      }
+    }
+
+    const payload = { page: pageName };
+
     const res = await fetch(DEFAULT_WEBHOOK, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'Hello from Sidekick!' }),
+      body: JSON.stringify(payload),
     });
 
-    showToast(`✅ Webhook response status: ${res.status}`, 'success');
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    showToast(`✅ Sent for review: ${pageName}`, 'success');
   } catch (err) {
-    showToast(`❌ Webhook error: ${err.message}`, 'error');
+    showToast(`❌ Failed: ${err.message}`, 'error');
   }
 }

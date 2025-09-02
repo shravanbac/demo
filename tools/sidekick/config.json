@@ -1,8 +1,13 @@
 {
-  "id": "send-for-review-v2",
-  "title": "Send For Review",
-  "environments": ["edit", "preview", "live"],
-  "url": "/tools/send-for-review/send-for-review.js",
-  "isPalette": false,
-  "passConfig": true
+  "project": "demo",
+  "plugins": [
+    {
+      "id": "send-for-review-v3",
+      "title": "Send For Review",
+      "environments": ["edit","dev","preview"],
+      "url": "/tools/send-for-review/send-for-review.js",
+      "isPalette": false,
+      "passConfig": true
+    }
+  ]
 }
