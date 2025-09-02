@@ -1,6 +1,5 @@
 const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 
-/** Simple toast helper */
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
@@ -21,16 +20,13 @@ function showToast(message, type = 'info') {
   setTimeout(() => toast.remove(), 4000);
 }
 
-/** Main handler */
 export default async function sendForReview() {
   showToast('⚡ Button clicked!', 'info');
 
   try {
     const res = await fetch(DEFAULT_WEBHOOK, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: 'Hello from Sidekick!' }),
     });
 
