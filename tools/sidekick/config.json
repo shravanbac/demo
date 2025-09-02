@@ -5,7 +5,7 @@
       "id": "send-for-review",
       "title": "Send For Review",
       "environments": ["edit","dev","preview"],
-      "url": "/tools/send-for-review/index.html",
+      "url": "/tools/send-for-review/send-for-review.html",
       "passConfig": true
     }
 
