@@ -3,9 +3,9 @@ const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfb
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL ||
-    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
-    DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL
+    || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim()
+    || DEFAULT_WEBHOOK
   );
 }
 
@@ -37,21 +37,21 @@ function getContext() {
 
 /** Build payload */
 function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow, title, env } = ctx;
+  const {
+    ref, site, org, host, path, isoNow, title, env,
+  } = ctx;
+
   const cleanPath = path.replace(/^\/+/, '');
-  const name =
-    (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(
-      /\.[^.]+$/,
-      ''
-    ) || 'index';
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
+    .replace(/\.[^.]+$/, '') || 'index';
 
-  let liveHost =
-    ref && site && org
-      ? `${ref}--${site}--${org}.aem.live`
-      : host.replace('.aem.page', '.aem.live');
+  const liveHost = ref && site && org
+    ? `${ref}--${site}--${org}.aem.live`
+    : host.replace('.aem.page', '.aem.live');
 
-  let previewHost =
-    ref && site && org ? `${ref}--${site}--${org}.aem.page` : host;
+  const previewHost = ref && site && org
+    ? `${ref}--${site}--${org}.aem.page`
+    : host;
 
   return {
     title,
@@ -90,14 +90,16 @@ async function postToWebhook(payload) {
 }
 
 /** Main */
-(async function sendForReview() {
+(async () => {
   try {
     const ctx = getContext();
     const payload = buildPayload(ctx);
     await postToWebhook(payload);
 
+    // eslint-disable-next-line no-alert
     alert('✅ Review request submitted successfully!');
   } catch (err) {
+    // eslint-disable-next-line no-alert
     alert(`❌ Review request failed: ${err.message}`);
   }
 })();
