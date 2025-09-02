@@ -1,4 +1,5 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
+const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
@@ -9,11 +10,39 @@ function resolveWebhook() {
   );
 }
 
+/** Extract email from a string */
+function extractEmail(text) {
+  if (!text) return null;
+  const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0] : null;
+}
+
+/** Find user email in current document only (no loops, lint-safe) */
+function findUserEmail(root = document) {
+  if (!root) return null;
+  const spans = Array.from(root.querySelectorAll('span[slot="description"], span.description'));
+  const match = spans.find((span) => extractEmail(span.textContent?.trim() || ''));
+  return match ? extractEmail(match.textContent?.trim() || '') : null;
+}
+
+/** Resolve submitter */
+function resolveSubmitter() {
+  return new Promise((resolve) => {
+    const tryFind = () => {
+      const email = findUserEmail();
+      if (email) resolve(email);
+      else setTimeout(tryFind, RETRY_INTERVAL_MS);
+    };
+    tryFind();
+  });
+}
+
 /** Collect authored page context */
 function getContext() {
-  const host = window.location.host || '';
-  const path = window.location.pathname || '';
-  const title = document.title || '';
+  const refUrl = document.referrer ? new URL(document.referrer) : null;
+  const host = refUrl?.host || '';
+  const path = refUrl?.pathname || '';
+  const title = refUrl ? '' : document.title;
 
   let ref = '';
   let site = '';
@@ -35,8 +64,8 @@ function getContext() {
   };
 }
 
-/** Build payload */
-function buildPayload(ctx) {
+/** Build full payload */
+async function buildPayload(ctx) {
   const {
     ref, site, org, host, path, isoNow, title, env,
   } = ctx;
@@ -45,19 +74,30 @@ function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const liveHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.live`
-    : host.replace('.aem.page', '.aem.live');
+  const submittedBy = await resolveSubmitter();
 
-  const previewHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.page`
-    : host;
+  let liveHost;
+  if (ref && site && org) {
+    liveHost = `${ref}--${site}--${org}.aem.live`;
+  } else if (host?.endsWith('.aem.page')) {
+    liveHost = host.replace('.aem.page', '.aem.live');
+  } else {
+    liveHost = host || 'localhost';
+  }
+
+  let previewHost;
+  if (ref && site && org) {
+    previewHost = `${ref}--${site}--${org}.aem.page`;
+  } else {
+    previewHost = host || 'localhost';
+  }
 
   return {
     title,
     url: `https://${liveHost}/${cleanPath}`,
     name,
     publishedDate: isoNow,
+    submittedBy,
     path: `/${cleanPath}`,
     previewUrl: `https://${previewHost}/${cleanPath}`,
     liveUrl: `https://${liveHost}/${cleanPath}`,
@@ -67,12 +107,21 @@ function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
-    lang: document.documentElement.lang || undefined,
+    lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
+    headings: [], // no parent DOM access
+    analytics: {
+      userAgent: navigator.userAgent,
+      timezoneOffset: new Date().getTimezoneOffset(),
+      viewport: {
+        width: window.innerWidth || 0,
+        height: window.innerHeight || 0,
+      },
+    },
   };
 }
 
-/** Send payload to webhook */
+/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -80,26 +129,49 @@ async function postToWebhook(payload) {
       'content-type': 'application/json',
       accept: 'application/json',
     },
+    mode: 'cors',
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+
+  try {
+    return await res.json();
+  } catch {
+    return {};
   }
-  return res;
 }
 
-/** Main */
-(async () => {
+/** Show toast notification instead of alert (lint-safe) */
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  Object.assign(toast.style, {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    background: type === 'error' ? '#c40000' : '#2e8540',
+    color: '#fff',
+    padding: '10px 16px',
+    borderRadius: '6px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+    zIndex: 9999,
+    fontSize: '14px',
+    fontFamily: 'Arial, sans-serif',
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+/** Main handler (sidekick calls this on button click) */
+export default async function sendForReview() {
   try {
     const ctx = getContext();
-    const payload = buildPayload(ctx);
+    const payload = await buildPayload(ctx);
     await postToWebhook(payload);
 
-    // eslint-disable-next-line no-alert
-    alert('✅ Review request submitted successfully!');
+    showToast('✅ Review request submitted to Workfront!', 'success');
   } catch (err) {
-    // eslint-disable-next-line no-alert
-    alert(`❌ Review request failed: ${err.message}`);
+    showToast(`❌ Failed to submit review: ${err.message}`, 'error');
   }
-})();
+}
