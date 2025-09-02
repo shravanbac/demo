@@ -1,4 +1,4 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
@@ -37,70 +37,58 @@ function resolveSubmitter() {
   });
 }
 
-/** Collect authored page context */
+/** Parse sidekick query params */
+function getSidekickParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    ref: params.get('ref'),
+    repo: params.get('repo'),
+    owner: params.get('owner'),
+    previewHost: params.get('previewHost'),
+    liveHost: params.get('liveHost'),
+    project: params.get('project'),
+  };
+}
+
+/** Collect authored page context using sidekick params */
 function getContext() {
-  const refUrl = document.referrer ? new URL(document.referrer) : null;
-  const host = refUrl?.host || '';
-  const path = refUrl?.pathname || '';
-  const title = refUrl ? '' : document.title;
+  const {
+    ref, repo, owner, previewHost, liveHost,
+  } = getSidekickParams();
 
-  let ref = '';
-  let site = '';
-  let org = '';
-  const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
-  if (match) [, ref, site, org] = match;
-
-  const env = host.includes('.aem.live') ? 'live' : 'page';
+  const host = previewHost || window.location.host;
 
   return {
     ref,
-    site,
-    org,
-    env,
-    path: path.replace(/^\//, ''),
-    title,
+    site: repo,
+    org: owner,
+    env: host.includes('.aem.live') ? 'live' : 'page',
+    path: '/', // real page, not /tools/send-for-review
+    title: document.title || 'Untitled Page',
     host,
     isoNow: new Date().toISOString(),
+    previewHost,
+    liveHost,
   };
 }
 
 /** Build full payload */
 async function buildPayload(ctx) {
   const {
-    ref, site, org, host, path, isoNow, title, env,
+    ref, site, org, host, isoNow, title, env, previewHost, liveHost,
   } = ctx;
-
-  const cleanPath = path.replace(/^\/+/, '');
-  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
-    .replace(/\.[^.]+$/, '') || 'index';
 
   const submittedBy = await resolveSubmitter();
 
-  let liveHost;
-  if (ref && site && org) {
-    liveHost = `${ref}--${site}--${org}.aem.live`;
-  } else if (host?.endsWith('.aem.page')) {
-    liveHost = host.replace('.aem.page', '.aem.live');
-  } else {
-    liveHost = host || 'localhost';
-  }
-
-  let previewHost;
-  if (ref && site && org) {
-    previewHost = `${ref}--${site}--${org}.aem.page`;
-  } else {
-    previewHost = host || 'localhost';
-  }
-
   return {
     title,
-    url: `https://${liveHost}/${cleanPath}`,
-    name,
+    url: `https://${liveHost}`, // live page
+    name: 'index',
     publishedDate: isoNow,
     submittedBy,
-    path: `/${cleanPath}`,
-    previewUrl: `https://${previewHost}/${cleanPath}`,
-    liveUrl: `https://${liveHost}/${cleanPath}`,
+    path: '/', // root path (or adjust if needed)
+    previewUrl: `https://${previewHost}`,
+    liveUrl: `https://${liveHost}`,
     host,
     env,
     org,
@@ -109,7 +97,7 @@ async function buildPayload(ctx) {
     source: 'DA.live',
     lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings: [], // no parent DOM access
+    headings: [], // skipping parent DOM access (CORS)
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
@@ -142,7 +130,7 @@ async function postToWebhook(payload) {
   }
 }
 
-/** Show toast notification instead of alert (lint-safe) */
+/** Show toast notification instead of alert */
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
