@@ -1,7 +1,7 @@
 {
   "id": "send-for-review",
   "title": "Send For Review",
-  "environments": ["edit","dev","preview"],
+  "environments": ["edit", "preview", "live"],
   "url": "/tools/send-for-review/send-for-review.js",
   "isPalette": false,
   "passConfig": true

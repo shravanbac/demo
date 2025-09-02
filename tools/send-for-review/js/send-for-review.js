@@ -17,10 +17,12 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Find user email in current document only (no loops, lint-safe) */
+/** Find user email in current document only (lint-safe) */
 function findUserEmail(root = document) {
   if (!root) return null;
-  const spans = Array.from(root.querySelectorAll('span[slot="description"], span.description'));
+  const spans = Array.from(
+    root.querySelectorAll("span[slot='description'], span.description"),
+  );
   const match = spans.find((span) => extractEmail(span.textContent?.trim() || ''));
   return match ? extractEmail(match.textContent?.trim() || '') : null;
 }
@@ -30,8 +32,11 @@ function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
       const email = findUserEmail();
-      if (email) resolve(email);
-      else setTimeout(tryFind, RETRY_INTERVAL_MS);
+      if (email) {
+        resolve(email);
+      } else {
+        setTimeout(tryFind, RETRY_INTERVAL_MS);
+      }
     };
     tryFind();
   });
@@ -46,58 +51,70 @@ function getSidekickParams() {
     owner: params.get('owner'),
     previewHost: params.get('previewHost'),
     liveHost: params.get('liveHost'),
-    project: params.get('project'),
   };
 }
 
-/** Collect authored page context using sidekick params */
+/** Collect authored page context */
 function getContext() {
   const {
     ref, repo, owner, previewHost, liveHost,
   } = getSidekickParams();
 
-  const host = previewHost || window.location.host;
+  // derive path from document.referrer
+  let pagePath = '/';
+  if (document.referrer) {
+    try {
+      const refUrl = new URL(document.referrer);
+      pagePath = refUrl.pathname;
+    } catch {
+      pagePath = '/';
+    }
+  }
 
   return {
     ref,
     site: repo,
     org: owner,
-    env: host.includes('.aem.live') ? 'live' : 'page',
-    path: '/', // real page, not /tools/send-for-review
-    title: document.title || 'Untitled Page',
-    host,
+    previewHost: previewHost || window.location.host,
+    liveHost:
+      liveHost
+      || (previewHost
+        ? previewHost.replace('.aem.page', '.aem.live')
+        : window.location.host.replace('.aem.page', '.aem.live')),
+    pagePath,
     isoNow: new Date().toISOString(),
-    previewHost,
-    liveHost,
   };
 }
 
 /** Build full payload */
 async function buildPayload(ctx) {
   const {
-    ref, site, org, host, isoNow, title, env, previewHost, liveHost,
+    ref, site, org, previewHost, liveHost, pagePath, isoNow,
   } = ctx;
+
+  const name = (pagePath.split('/').filter(Boolean).pop() || 'index')
+    .replace(/\.[^.]+$/, '') || 'index';
 
   const submittedBy = await resolveSubmitter();
 
   return {
-    title,
-    url: `https://${liveHost}`, // live page
-    name: 'index',
+    title: document.title || name,
+    url: `https://${liveHost}${pagePath}`,
+    name,
     publishedDate: isoNow,
     submittedBy,
-    path: '/', // root path (or adjust if needed)
-    previewUrl: `https://${previewHost}`,
-    liveUrl: `https://${liveHost}`,
-    host,
-    env,
+    path: pagePath,
+    previewUrl: `https://${previewHost}${pagePath}`,
+    liveUrl: `https://${liveHost}${pagePath}`,
+    host: previewHost,
+    env: previewHost.includes('.aem.live') ? 'live' : 'page',
     org,
     site,
     ref,
     source: 'DA.live',
     lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings: [], // skipping parent DOM access (CORS)
+    headings: [],
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
@@ -121,7 +138,9 @@ async function postToWebhook(payload) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
 
   try {
     return await res.json();
@@ -130,7 +149,7 @@ async function postToWebhook(payload) {
   }
 }
 
-/** Show toast notification instead of alert */
+/** Show toast notification */
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.textContent = message;
@@ -157,7 +176,6 @@ export default async function sendForReview() {
     const ctx = getContext();
     const payload = await buildPayload(ctx);
     await postToWebhook(payload);
-
     showToast('✅ Review request submitted to Workfront!', 'success');
   } catch (err) {
     showToast(`❌ Failed to submit review: ${err.message}`, 'error');
