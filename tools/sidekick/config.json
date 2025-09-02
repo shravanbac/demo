@@ -1,5 +1,5 @@
 {
-  "id": "send-for-review",
+  "id": "send-for-review-v2",
   "title": "Send For Review",
   "environments": ["edit", "preview", "live"],
   "url": "/tools/send-for-review/send-for-review.js",
