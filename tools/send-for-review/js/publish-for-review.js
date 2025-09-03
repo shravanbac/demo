@@ -1,1 +1,3 @@
-alert("Publish-for-review clicked!!!");
+export default function publishForReview() {
+  alert('✅ Publish-for-review clicked!!!');
+}
