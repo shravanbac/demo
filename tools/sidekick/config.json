@@ -2,7 +2,7 @@
   "project": "demo",
   "plugins": [
     {
-      "id": "send-for-review-v4",
+      "id": "send-for-review-v5",
       "title": "Send For Review",
       "environments": ["edit","dev","preview"],
       "url": "/tools/send-for-review/send-for-review.js",
@@ -10,7 +10,7 @@
     },
     {
     
-      "id": "publish-for-review",
+      "id": "publish-for-review-v5",
       "title": "Publish For Review",
       "environments": ["edit","dev","preview"],
       "url": "/tools/send-for-review/publish-for-review.js",
